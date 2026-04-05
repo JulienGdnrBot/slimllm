@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-04-05)
+
+### Features
+
+- **providers**: Add Mistral, DeepSeek, Google AI Studio + retry with backoff
+  ([`c8946bf`](https://github.com/JulienGdnrBot/slimllm/commit/c8946bf87f8b61a5f2981faf670fcef2719aa24c))
+
+
 ## v1.1.0 (2026-04-05)
 
 ### Features

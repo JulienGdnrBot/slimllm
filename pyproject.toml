@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "slimllm"
-version = "1.1.0"
+version = "1.2.0"
 description = "Zero-dependency LiteLLM-compatible facade for OpenAI, Anthropic, and OpenRouter"
 readme = "README.md"
 requires-python = ">=3.11"
