@@ -20,6 +20,7 @@ from typing import Any, Dict, Generator, Optional, Tuple
 
 # Re-use a module-level SSL context so we don't rebuild it on every call.
 _SSL_CTX = ssl.create_default_context()
+_SSL_CTX.set_alpn_protocols(["http/1.1"])
 
 
 # ---------------------------------------------------------------------------
