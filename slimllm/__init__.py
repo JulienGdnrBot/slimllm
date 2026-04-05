@@ -54,7 +54,11 @@ from .types import (
     Usage,
 )
 
-__version__ = "0.1.0"
+from importlib.metadata import version as _pkg_version, PackageNotFoundError as _PNF
+try:
+    __version__ = _pkg_version("slimllm")
+except _PNF:
+    __version__ = "0.0.0"  # fallback when running from source without install
 
 __all__ = [
     # Core functions
