@@ -39,6 +39,14 @@ ANTHROPIC_BASE = "https://api.anthropic.com"
 ANTHROPIC_VERSION = "2023-06-01"
 DEFAULT_MAX_TOKENS = 4096
 
+# OpenAI-specific params that Anthropic's API does not accept.
+# These are silently dropped rather than forwarded.
+_ANTHROPIC_DROP_PARAMS = frozenset({
+    "user", "stream_options", "logprobs", "logit_bias",
+    "n", "presence_penalty", "frequency_penalty", "best_of",
+    "suffix", "echo", "completion_tokens_details",
+})
+
 
 class AnthropicProvider(BaseProvider):
 
@@ -115,11 +123,14 @@ class AnthropicProvider(BaseProvider):
         filtered_messages = []
         for msg in messages:
             if msg.get("role") == "system":
-                # Multiple system messages → concatenate
-                if system is None:
-                    system = msg.get("content", "")
+                content = msg.get("content", "")
+                if isinstance(content, list):
+                    # Already a list of content blocks (e.g. with cache_control) — use as-is
+                    system = content
+                elif system is None:
+                    system = content
                 else:
-                    system += "\n\n" + msg.get("content", "")
+                    system += "\n\n" + content
             else:
                 filtered_messages.append(self._convert_message(msg))
 
@@ -142,7 +153,8 @@ class AnthropicProvider(BaseProvider):
         if stop:
             body["stop_sequences"] = [stop] if isinstance(stop, str) else stop
 
-        body.update(kwargs)
+        # Drop OpenAI-specific params that Anthropic rejects
+        body.update({k: v for k, v in kwargs.items() if k not in _ANTHROPIC_DROP_PARAMS})
         return body
 
     # ------------------------------------------------------------------

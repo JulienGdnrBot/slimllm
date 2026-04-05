@@ -23,6 +23,28 @@ from .providers.anthropic import AnthropicProvider
 from .providers.openai import OpenAIProvider, OpenRouterProvider
 from .types import ModelResponse, StreamingChunk, StreamResponse
 
+
+def token_counter(model: str, text: str) -> int:
+    """
+    Estimate the number of tokens in *text* for the given *model*.
+
+    Uses tiktoken when installed (accurate); falls back to a
+    character-based approximation (~4 chars per token) otherwise.
+    The fallback is intentionally conservative and works well enough
+    for context-window monitoring and cost estimation.
+    """
+    if not text:
+        return 0
+    try:
+        import tiktoken  # type: ignore[import]
+        try:
+            enc = tiktoken.encoding_for_model(model)
+        except KeyError:
+            enc = tiktoken.get_encoding("cl100k_base")
+        return len(enc.encode(text))
+    except ImportError:
+        return max(1, len(text) // 4)
+
 # Module-level provider singletons (stateless, safe to share)
 _openai = OpenAIProvider()
 _anthropic = AnthropicProvider()
@@ -125,6 +147,10 @@ def completion(
     provider, resolved_model = _route(model)
     key = _resolve_api_key(provider, api_key)
 
+    # Accept base_url as an alias for api_base (litellm compatibility)
+    if api_base is None and "base_url" in kwargs:
+        api_base = kwargs.pop("base_url")
+
     result = provider.completion(
         model=resolved_model,
         messages=messages,
@@ -177,6 +203,10 @@ async def acompletion(
     the resulting :class:`StreamResponse` is returned when fully built —
     use :func:`astream` instead if you need token-by-token async iteration.
     """
+    # Accept base_url as an alias for api_base (litellm compatibility)
+    if api_base is None and "base_url" in kwargs:
+        api_base = kwargs.pop("base_url")
+
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
         _executor,
@@ -226,6 +256,11 @@ async def astream(
     """
     provider, resolved_model = _route(model)
     key = _resolve_api_key(provider, api_key)
+
+    # Accept base_url as an alias for api_base (litellm compatibility)
+    if api_base is None and "base_url" in kwargs:
+        api_base = kwargs.pop("base_url")
+
     loop = asyncio.get_event_loop()
 
     # Build a synchronous generator in a thread and pull chunks across

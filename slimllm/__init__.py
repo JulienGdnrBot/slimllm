@@ -38,7 +38,7 @@ from .exceptions import (
     SlimLLMError,
     UnsupportedProviderError,
 )
-from .main import acompletion, astream, completion
+from .main import acompletion, astream, completion, token_counter
 from .types import (
     Choice,
     DeltaMessage,
@@ -65,6 +65,7 @@ __all__ = [
     "completion",
     "acompletion",
     "astream",
+    "token_counter",
     # Types
     "ModelResponse",
     "Choice",
