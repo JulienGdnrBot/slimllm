@@ -18,7 +18,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Generator, List, Optional, Union
 
-from .exceptions import UnsupportedProviderError
+from .exceptions import AuthenticationError, UnsupportedProviderError
 from .providers.anthropic import AnthropicProvider
 from .providers.openai import OpenAIProvider, OpenRouterProvider
 from .types import ModelResponse, StreamingChunk, StreamResponse
@@ -59,8 +59,10 @@ def _resolve_api_key(provider, explicit_key: Optional[str]) -> str:
     env_var = env_map.get(type(provider).__name__, "OPENAI_API_KEY")
     key = os.environ.get(env_var, "")
     if not key:
-        raise ValueError(
-            f"No API key provided. Set {env_var} or pass api_key= explicitly."
+        raise AuthenticationError(
+            f"No API key provided. Set {env_var} or pass api_key= explicitly.",
+            status_code=401,
+            provider=type(provider).__name__,
         )
     return key
 
