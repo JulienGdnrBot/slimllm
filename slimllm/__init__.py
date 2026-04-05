@@ -2,9 +2,12 @@
 slimllm — zero-dependency LiteLLM-compatible facade.
 
 Supported providers:
-  - OpenAI          (model: "gpt-4o", "gpt-3.5-turbo", …)
-  - Anthropic       (model: "claude-3-5-sonnet-20241022", …)
-  - OpenRouter      (model: "openrouter/meta-llama/llama-3.3-70b-instruct", …)
+  - OpenAI          (model: "gpt-4o", "gpt-4.1", …)
+  - Anthropic       (model: "claude-3-5-sonnet-20241022", "claude-sonnet-4-6", …)
+  - OpenRouter      (model: "openrouter/meta-llama/llama-4-maverick", …)
+  - Mistral AI      (model: "mistral-large-2512", "mistral/mistral-medium", …)
+  - DeepSeek        (model: "deepseek-chat", "deepseek/deepseek-r1", …)
+  - Google AI Studio(model: "gemini-2.5-flash", "gemini/gemini-2.5-pro", …)
 
 Quick start::
 
@@ -46,6 +49,8 @@ from .types import (
     FunctionDefinition,
     Message,
     ModelResponse,
+    ProviderConfig,
+    RetryConfig,
     StreamingChunk,
     StreamingChoice,
     StreamResponse,
@@ -79,6 +84,8 @@ __all__ = [
     "StreamingChoice",
     "DeltaMessage",
     "StreamResponse",
+    "RetryConfig",
+    "ProviderConfig",
     # Exceptions
     "SlimLLMError",
     "AuthenticationError",

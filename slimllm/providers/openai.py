@@ -26,9 +26,20 @@ from ..types import (
 )
 from ._base import BaseProvider
 
+__all__ = [
+    "OpenAIProvider",
+    "OpenRouterProvider",
+    "MistralProvider",
+    "DeepSeekProvider",
+    "GoogleAIStudioProvider",
+]
+
 # Default base URLs — can be overridden via extra_headers / api_base kwarg
 OPENAI_BASE = "https://api.openai.com/v1"
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
+MISTRAL_BASE = "https://api.mistral.ai/v1"
+DEEPSEEK_BASE = "https://api.deepseek.com/v1"
+GOOGLE_AI_STUDIO_BASE = "https://generativelanguage.googleapis.com/v1beta/openai"
 
 
 class OpenAIProvider(BaseProvider):
@@ -277,3 +288,52 @@ class OpenRouterProvider(OpenAIProvider):
         h.setdefault("HTTP-Referer", "https://github.com/slimllm")
         h.setdefault("X-Title", "slimllm")
         return h
+
+
+class MistralProvider(OpenAIProvider):
+    """
+    Mistral AI — 100% OpenAI-compatible wire format, different base URL.
+
+    Models: mistral-small, mistral-medium, mistral-large-*, mistral-nemo,
+            codestral-*, ministral-*, devstral-*
+
+    Routing: model starts with "mistral-", "codestral-", "ministral-",
+             "devstral-", or uses explicit "mistral/" prefix.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(base_url=MISTRAL_BASE)
+
+
+class DeepSeekProvider(OpenAIProvider):
+    """
+    DeepSeek — OpenAI-compatible wire format, different base URL.
+
+    Models: deepseek-chat, deepseek-coder, deepseek-reasoner, etc.
+
+    Routing: model starts with "deepseek-" or uses explicit "deepseek/" prefix.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(base_url=DEEPSEEK_BASE)
+
+
+class GoogleAIStudioProvider(OpenAIProvider):
+    """
+    Google AI Studio (Gemini) — exposed as an OpenAI-compatible endpoint.
+
+    Google provides an OpenAI-compatible shim at:
+      https://generativelanguage.googleapis.com/v1beta/openai
+
+    Models: gemini-2.0-flash, gemini-2.5-pro, gemini-2.5-flash, etc.
+
+    Routing: model starts with "gemini-" or uses explicit "gemini/" or
+             "googleaistudio/" prefix.
+
+    Note: For production workloads prefer the native Gemini API via
+    Google AI Studio's own SDK; this shim is convenient but may lag
+    behind on new Gemini features.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(base_url=GOOGLE_AI_STUDIO_BASE)

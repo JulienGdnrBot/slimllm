@@ -23,11 +23,19 @@ import slimllm
 from slimllm._sse import iter_events
 from slimllm.main import _route
 from slimllm.providers.anthropic import AnthropicProvider
-from slimllm.providers.openai import OpenAIProvider, OpenRouterProvider
+from slimllm.providers.openai import (
+    DeepSeekProvider,
+    GoogleAIStudioProvider,
+    MistralProvider,
+    OpenAIProvider,
+    OpenRouterProvider,
+)
 from slimllm.types import (
     DeltaMessage,
     FunctionCall,
     ModelResponse,
+    ProviderConfig,
+    RetryConfig,
     StreamingChunk,
     StreamingChoice,
     StreamResponse,
@@ -59,6 +67,51 @@ class TestRouting(unittest.TestCase):
         provider, model = _route("openrouter/meta-llama/llama-3.3-70b")
         self.assertIsInstance(provider, OpenRouterProvider)
         self.assertEqual(model, "meta-llama/llama-3.3-70b")
+
+    def test_mistral_bare(self):
+        provider, model = _route("mistral-large-2512")
+        self.assertIsInstance(provider, MistralProvider)
+        self.assertEqual(model, "mistral-large-2512")
+
+    def test_mistral_prefix(self):
+        provider, model = _route("mistral/mistral-medium")
+        self.assertIsInstance(provider, MistralProvider)
+        self.assertEqual(model, "mistral-medium")
+
+    def test_codestral_bare(self):
+        provider, model = _route("codestral-latest")
+        self.assertIsInstance(provider, MistralProvider)
+        self.assertEqual(model, "codestral-latest")
+
+    def test_devstral_bare(self):
+        provider, model = _route("devstral-2-2512")
+        self.assertIsInstance(provider, MistralProvider)
+        self.assertEqual(model, "devstral-2-2512")
+
+    def test_deepseek_bare(self):
+        provider, model = _route("deepseek-chat")
+        self.assertIsInstance(provider, DeepSeekProvider)
+        self.assertEqual(model, "deepseek-chat")
+
+    def test_deepseek_prefix(self):
+        provider, model = _route("deepseek/deepseek-r1")
+        self.assertIsInstance(provider, DeepSeekProvider)
+        self.assertEqual(model, "deepseek-r1")
+
+    def test_gemini_bare(self):
+        provider, model = _route("gemini-2.5-flash")
+        self.assertIsInstance(provider, GoogleAIStudioProvider)
+        self.assertEqual(model, "gemini-2.5-flash")
+
+    def test_gemini_prefix(self):
+        provider, model = _route("gemini/gemini-2.5-pro")
+        self.assertIsInstance(provider, GoogleAIStudioProvider)
+        self.assertEqual(model, "gemini-2.5-pro")
+
+    def test_googleaistudio_prefix(self):
+        provider, model = _route("googleaistudio/gemini-2.0-flash")
+        self.assertIsInstance(provider, GoogleAIStudioProvider)
+        self.assertEqual(model, "gemini-2.0-flash")
 
 
 # ---------------------------------------------------------------------------
@@ -392,6 +445,113 @@ class TestOpenAIStreamParsing(unittest.TestCase):
         tcs = chunk.choices[0].delta.tool_calls
         self.assertIsNotNone(tcs)
         self.assertEqual(tcs[0].function.name, "foo")
+
+
+# ---------------------------------------------------------------------------
+# RetryConfig / ProviderConfig dataclasses
+# ---------------------------------------------------------------------------
+
+class TestDataclasses(unittest.TestCase):
+    def test_retry_config_defaults(self):
+        cfg = RetryConfig()
+        self.assertEqual(cfg.max_retries, 3)
+        self.assertEqual(cfg.backoff_base, 1.0)
+        self.assertIn(429, cfg.retryable_status_codes)
+        self.assertIn(500, cfg.retryable_status_codes)
+
+    def test_retry_config_custom(self):
+        cfg = RetryConfig(max_retries=0)
+        self.assertEqual(cfg.max_retries, 0)
+
+    def test_provider_config_defaults(self):
+        cfg = ProviderConfig(api_key="sk-test")
+        self.assertEqual(cfg.api_key, "sk-test")
+        self.assertIsNone(cfg.base_url)
+        self.assertIsNone(cfg.extra_headers)
+        self.assertIsNone(cfg.retry)
+
+    def test_provider_config_with_retry(self):
+        retry = RetryConfig(max_retries=1, backoff_base=0.5)
+        cfg = ProviderConfig(api_key="sk-test", retry=retry)
+        self.assertEqual(cfg.retry.max_retries, 1)
+
+
+# ---------------------------------------------------------------------------
+# Retry logic (_http.post_json)
+# ---------------------------------------------------------------------------
+
+class TestRetryLogic(unittest.TestCase):
+    def test_no_retry_on_success(self):
+        """post_json should not retry when the first call succeeds."""
+        import slimllm._http as http_mod
+
+        call_count = 0
+
+        def fake_once(url, headers, body, timeout):
+            nonlocal call_count
+            call_count += 1
+            return 200, {"ok": True}
+
+        original = http_mod._post_json_once
+        http_mod._post_json_once = fake_once
+        try:
+            status, data = http_mod.post_json("https://example.com", {}, {})
+            self.assertEqual(status, 200)
+            self.assertEqual(call_count, 1)
+        finally:
+            http_mod._post_json_once = original
+
+    def test_retries_on_429(self):
+        """post_json should retry up to max_retries on retryable status."""
+        import slimllm._http as http_mod
+
+        call_count = 0
+        sleeps = []
+
+        def fake_once(url, headers, body, timeout):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                return 429, {"error": "rate limit"}
+            return 200, {"ok": True}
+
+        def fake_sleep(secs):
+            sleeps.append(secs)
+
+        original_once = http_mod._post_json_once
+        original_sleep = http_mod.time.sleep
+        http_mod._post_json_once = fake_once
+        http_mod.time.sleep = fake_sleep
+        try:
+            cfg = RetryConfig(max_retries=3, backoff_base=0.1)
+            status, data = http_mod.post_json("https://example.com", {}, {}, retry=cfg)
+            self.assertEqual(status, 200)
+            self.assertEqual(call_count, 3)
+            self.assertEqual(len(sleeps), 2)  # slept before attempts 2 and 3
+        finally:
+            http_mod._post_json_once = original_once
+            http_mod.time.sleep = original_sleep
+
+    def test_no_retry_when_disabled(self):
+        """RetryConfig(max_retries=0) should not retry at all."""
+        import slimllm._http as http_mod
+
+        call_count = 0
+
+        def fake_once(url, headers, body, timeout):
+            nonlocal call_count
+            call_count += 1
+            return 500, {"error": "server error"}
+
+        original = http_mod._post_json_once
+        http_mod._post_json_once = fake_once
+        try:
+            cfg = RetryConfig(max_retries=0)
+            status, _ = http_mod.post_json("https://example.com", {}, {}, retry=cfg)
+            self.assertEqual(status, 500)
+            self.assertEqual(call_count, 1)
+        finally:
+            http_mod._post_json_once = original
 
 
 if __name__ == "__main__":

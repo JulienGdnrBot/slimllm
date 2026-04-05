@@ -20,8 +20,14 @@ from typing import Any, Dict, Generator, List, Optional, Union
 
 from .exceptions import AuthenticationError, UnsupportedProviderError
 from .providers.anthropic import AnthropicProvider
-from .providers.openai import OpenAIProvider, OpenRouterProvider
-from .types import ModelResponse, StreamingChunk, StreamResponse
+from .providers.openai import (
+    DeepSeekProvider,
+    GoogleAIStudioProvider,
+    MistralProvider,
+    OpenAIProvider,
+    OpenRouterProvider,
+)
+from .types import ModelResponse, RetryConfig, StreamingChunk, StreamResponse
 
 
 def token_counter(model: str, text: str) -> int:
@@ -49,6 +55,9 @@ def token_counter(model: str, text: str) -> int:
 _openai = OpenAIProvider()
 _anthropic = AnthropicProvider()
 _openrouter = OpenRouterProvider()
+_mistral = MistralProvider()
+_deepseek = DeepSeekProvider()
+_google = GoogleAIStudioProvider()
 
 # Thread pool for wrapping sync I/O in async calls
 _executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="slimllm")
@@ -59,13 +68,43 @@ _executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="slimllm")
 # ---------------------------------------------------------------------------
 
 def _route(model: str):
-    """Return (provider_instance, resolved_model_name)."""
+    """
+    Return (provider_instance, resolved_model_name).
+
+    Routing priority (first match wins):
+      openrouter/...          → OpenRouter (strip prefix)
+      anthropic/... / claude- → Anthropic (strip prefix if present)
+      mistral/ prefix         → Mistral AI (strip prefix)
+      mistral-* / codestral-* / ministral-* / devstral-*
+                              → Mistral AI (bare model name)
+      deepseek/ prefix        → DeepSeek (strip prefix)
+      deepseek-*              → DeepSeek (bare model name)
+      gemini/ / googleaistudio/ prefix
+                              → Google AI Studio (strip prefix)
+      gemini-*                → Google AI Studio (bare model name)
+      everything else         → OpenAI-compatible
+    """
     if model.startswith("openrouter/"):
         return _openrouter, model[len("openrouter/"):]
     if model.startswith("anthropic/"):
         return _anthropic, model[len("anthropic/"):]
     if model.startswith("claude-"):
         return _anthropic, model
+    if model.startswith("mistral/"):
+        return _mistral, model[len("mistral/"):]
+    if (model.startswith("mistral-") or model.startswith("codestral-")
+            or model.startswith("ministral-") or model.startswith("devstral-")):
+        return _mistral, model
+    if model.startswith("deepseek/"):
+        return _deepseek, model[len("deepseek/"):]
+    if model.startswith("deepseek-"):
+        return _deepseek, model
+    if model.startswith("gemini/"):
+        return _google, model[len("gemini/"):]
+    if model.startswith("googleaistudio/"):
+        return _google, model[len("googleaistudio/"):]
+    if model.startswith("gemini-"):
+        return _google, model
     # Default: OpenAI-compatible
     return _openai, model
 
@@ -77,6 +116,9 @@ def _resolve_api_key(provider, explicit_key: Optional[str]) -> str:
         "AnthropicProvider": "ANTHROPIC_API_KEY",
         "OpenRouterProvider": "OPENROUTER_API_KEY",
         "OpenAIProvider": "OPENAI_API_KEY",
+        "MistralProvider": "MISTRAL_API_KEY",
+        "DeepSeekProvider": "DEEPSEEK_API_KEY",
+        "GoogleAIStudioProvider": "GOOGLE_API_KEY",
     }
     env_var = env_map.get(type(provider).__name__, "OPENAI_API_KEY")
     key = os.environ.get(env_var, "")

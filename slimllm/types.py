@@ -8,7 +8,55 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List, Literal, Optional
+from typing import Any, Dict, Iterator, List, Literal, Optional, Tuple
+
+
+# ---------------------------------------------------------------------------
+# Configuration dataclasses
+# ---------------------------------------------------------------------------
+
+@dataclass
+class RetryConfig:
+    """
+    Retry behaviour for HTTP calls.
+
+    Fields
+    ------
+    max_retries : int
+        Total number of retry attempts (0 = no retries, default 3).
+    backoff_base : float
+        Seconds to sleep before first retry; doubles each attempt (default 1.0).
+    retryable_status_codes : tuple[int, ...]
+        HTTP status codes that trigger a retry (default: 429, 500, 502, 503, 504).
+    """
+    max_retries: int = 3
+    backoff_base: float = 1.0
+    retryable_status_codes: Tuple[int, ...] = (429, 500, 502, 503, 504)
+
+
+@dataclass
+class ProviderConfig:
+    """
+    Runtime configuration for a provider call.
+
+    Passed through to provider.completion() to override defaults without
+    polluting the call signature with dozens of optional kwargs.
+
+    Fields
+    ------
+    api_key : str
+        Provider API key (required at call time).
+    base_url : str | None
+        Override the provider's default base URL (proxies, local models).
+    extra_headers : dict | None
+        Additional HTTP headers merged into every request.
+    retry : RetryConfig | None
+        Retry behaviour; uses module default when None.
+    """
+    api_key: str = ""
+    base_url: Optional[str] = None
+    extra_headers: Optional[Dict[str, str]] = None
+    retry: Optional[RetryConfig] = None
 
 
 # ---------------------------------------------------------------------------
