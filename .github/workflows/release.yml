@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    concurrency: release  # prevent concurrent releases
+    permissions:
+      id-token: write   # for PyPI trusted publishing
+      contents: write   # to push version bump commit + tag
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history so PSR can read all commits
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install python-semantic-release
+        run: pip install python-semantic-release
+
+      - name: Run semantic-release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          semantic-release version
+          semantic-release publish
+
+      # Upload the built dist/ to PyPI only when a new version was released.
+      # Uses OIDC trusted publishing — no PYPI_TOKEN secret needed.
+      # Requires a trusted publisher configured on pypi.org for this repo.
+      - name: Publish to PyPI
+        if: steps.release.outputs.released == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1

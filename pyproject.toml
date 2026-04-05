@@ -24,10 +24,28 @@ dependencies = []
 dev = ["pytest", "pytest-asyncio"]
 
 [project.urls]
-Homepage = "https://github.com/JulienGdnr/slimllm"
-Repository = "https://github.com/JulienGdnr/slimllm"
-Issues = "https://github.com/JulienGdnr/slimllm/issues"
+Homepage = "https://github.com/JulienGdnrBot/slimllm"
+Repository = "https://github.com/JulienGdnrBot/slimllm"
+Issues = "https://github.com/JulienGdnrBot/slimllm/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["slimllm*"]
+
+# ---------------------------------------------------------------------------
+# python-semantic-release
+# ---------------------------------------------------------------------------
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+branch = "main"
+# Don't publish to PyPI directly — let the publish.yml workflow do it
+# via OIDC trusted publishing (no token needed)
+upload_to_pypi = false
+upload_to_release = true
+build_command = "pip install build && python -m build"
+commit_message = "chore(release): v{version} [skip ci]"
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = ["feat", "fix", "perf", "refactor", "chore", "docs", "style", "test", "ci", "build"]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
