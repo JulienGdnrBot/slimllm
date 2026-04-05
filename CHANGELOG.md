@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.2 (2026-04-05)
+
+### Bug Fixes
+
+- Read __version__ from package metadata instead of hardcoded string
+  ([`1d0e1e4`](https://github.com/JulienGdnrBot/slimllm/commit/1d0e1e4eb7e8a9013f6e4953fb51c519fa2ba70e))
+
+
 ## v1.0.1 (2026-04-05)
 
 ### Bug Fixes
