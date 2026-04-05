@@ -259,9 +259,21 @@ class OpenAIProvider(BaseProvider):
                         role=delta_raw.get("role"),
                         content=delta_raw.get("content"),
                         tool_calls=tool_calls,
+                        # DeepSeek-R1 and some OpenAI reasoning models emit this
+                        reasoning_content=delta_raw.get("reasoning_content"),
                     ),
                     finish_reason=raw.get("finish_reason"),
                 )
+            )
+
+        # Usage is present on the final chunk when stream_options=include_usage
+        raw_usage = chunk.get("usage")
+        usage = None
+        if raw_usage:
+            usage = Usage(
+                prompt_tokens=raw_usage.get("prompt_tokens", 0),
+                completion_tokens=raw_usage.get("completion_tokens", 0),
+                total_tokens=raw_usage.get("total_tokens", 0),
             )
 
         return StreamingChunk(
@@ -269,6 +281,7 @@ class OpenAIProvider(BaseProvider):
             model=chunk.get("model", fallback_model),
             choices=choices,
             created=chunk.get("created", 0),
+            usage=usage,
         )
 
 

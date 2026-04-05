@@ -30,16 +30,22 @@ from slimllm.providers.openai import (
     OpenAIProvider,
     OpenRouterProvider,
 )
+from slimllm.main import _norm_msg, _norm_tool
 from slimllm.types import (
+    ContentBlock,
     DeltaMessage,
     FunctionCall,
+    FunctionDefinition,
+    Message,
     ModelResponse,
     ProviderConfig,
     RetryConfig,
     StreamingChunk,
     StreamingChoice,
     StreamResponse,
+    Tool,
     ToolCall,
+    Usage,
 )
 
 
@@ -552,6 +558,218 @@ class TestRetryLogic(unittest.TestCase):
             self.assertEqual(call_count, 1)
         finally:
             http_mod._post_json_once = original
+
+
+# ---------------------------------------------------------------------------
+# Message dataclass
+# ---------------------------------------------------------------------------
+
+class TestMessage(unittest.TestCase):
+    def test_user_factory(self):
+        m = Message.user("hello")
+        self.assertEqual(m.role, "user")
+        self.assertEqual(m.content, "hello")
+
+    def test_system_factory(self):
+        m = Message.system("you are helpful")
+        self.assertEqual(m.role, "system")
+
+    def test_assistant_factory(self):
+        m = Message.assistant("hi there")
+        self.assertEqual(m.role, "assistant")
+        self.assertEqual(m.content, "hi there")
+
+    def test_tool_result_factory(self):
+        m = Message.tool_result("call_123", '{"result": 42}')
+        self.assertEqual(m.role, "tool")
+        self.assertEqual(m.tool_call_id, "call_123")
+
+    def test_to_dict_simple(self):
+        d = Message.user("hello").to_dict()
+        self.assertEqual(d, {"role": "user", "content": "hello"})
+
+    def test_to_dict_tool_result(self):
+        d = Message.tool_result("call_1", "ok").to_dict()
+        self.assertEqual(d["role"], "tool")
+        self.assertEqual(d["tool_call_id"], "call_1")
+
+    def test_to_dict_assistant_with_tool_calls(self):
+        tc = ToolCall(id="call_1", function=FunctionCall(name="foo", arguments='{"x":1}'))
+        m = Message.assistant(tool_calls=[tc])
+        d = m.to_dict()
+        self.assertEqual(d["role"], "assistant")
+        self.assertEqual(d["tool_calls"][0]["id"], "call_1")
+        self.assertEqual(d["tool_calls"][0]["function"]["name"], "foo")
+
+    def test_to_dict_content_list(self):
+        blocks = [ContentBlock.text_block("hi"), ContentBlock.text_block("there")]
+        m = Message.user(blocks)
+        d = m.to_dict()
+        self.assertEqual(d["content"][0], {"type": "text", "text": "hi"})
+
+    def test_from_dict_simple(self):
+        m = Message.from_dict({"role": "user", "content": "hello"})
+        self.assertEqual(m.role, "user")
+        self.assertEqual(m.content, "hello")
+
+    def test_from_dict_with_tool_calls(self):
+        raw = {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {"id": "c1", "function": {"name": "bar", "arguments": "{}"}}
+            ],
+        }
+        m = Message.from_dict(raw)
+        self.assertEqual(m.tool_calls[0].id, "c1")
+        self.assertEqual(m.tool_calls[0].function.name, "bar")
+
+    def test_roundtrip(self):
+        original = {"role": "user", "content": "test roundtrip"}
+        self.assertEqual(Message.from_dict(original).to_dict(), original)
+
+
+# ---------------------------------------------------------------------------
+# ContentBlock dataclass
+# ---------------------------------------------------------------------------
+
+class TestContentBlock(unittest.TestCase):
+    def test_text_block(self):
+        b = ContentBlock.text_block("hello")
+        self.assertEqual(b.to_dict(), {"type": "text", "text": "hello"})
+
+    def test_text_block_with_cache(self):
+        b = ContentBlock.text_block("sys", cache_control={"type": "ephemeral"})
+        d = b.to_dict()
+        self.assertEqual(d["cache_control"], {"type": "ephemeral"})
+
+    def test_image_block(self):
+        b = ContentBlock.image_block("https://example.com/img.png")
+        d = b.to_dict()
+        self.assertEqual(d["type"], "image_url")
+        self.assertEqual(d["image_url"]["url"], "https://example.com/img.png")
+
+    def test_from_dict(self):
+        b = ContentBlock.from_dict({"type": "text", "text": "hi", "cache_control": {"type": "ephemeral"}})
+        self.assertEqual(b.text, "hi")
+        self.assertEqual(b.cache_control, {"type": "ephemeral"})
+
+    def test_from_dict_unknown_fields_in_extra(self):
+        b = ContentBlock.from_dict({"type": "text", "text": "x", "custom_field": "y"})
+        self.assertEqual(b.extra, {"custom_field": "y"})
+
+
+# ---------------------------------------------------------------------------
+# Tool dataclass
+# ---------------------------------------------------------------------------
+
+class TestTool(unittest.TestCase):
+    def test_from_function(self):
+        t = Tool.from_function(
+            "get_weather",
+            description="Get weather",
+            parameters={"type": "object", "properties": {"city": {"type": "string"}}},
+        )
+        self.assertEqual(t.type, "function")
+        self.assertEqual(t.function.name, "get_weather")
+
+    def test_to_dict(self):
+        t = Tool.from_function("foo", description="bar")
+        d = t.to_dict()
+        self.assertEqual(d["type"], "function")
+        self.assertEqual(d["function"]["name"], "foo")
+        self.assertEqual(d["function"]["description"], "bar")
+
+    def test_from_dict_roundtrip(self):
+        raw = {
+            "type": "function",
+            "function": {
+                "name": "add",
+                "description": "adds two numbers",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }
+        t = Tool.from_dict(raw)
+        self.assertEqual(t.to_dict(), raw)
+
+
+# ---------------------------------------------------------------------------
+# Input normalisation
+# ---------------------------------------------------------------------------
+
+class TestNormalisation(unittest.TestCase):
+    def test_norm_msg_passthrough_dict(self):
+        d = {"role": "user", "content": "hi"}
+        self.assertIs(_norm_msg(d), d)
+
+    def test_norm_msg_from_dataclass(self):
+        m = Message.user("hi")
+        result = _norm_msg(m)
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["role"], "user")
+
+    def test_norm_tool_passthrough_dict(self):
+        d = {"type": "function", "function": {"name": "f"}}
+        self.assertIs(_norm_tool(d), d)
+
+    def test_norm_tool_from_dataclass(self):
+        t = Tool.from_function("f")
+        result = _norm_tool(t)
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["function"]["name"], "f")
+
+
+# ---------------------------------------------------------------------------
+# Stream objects — reasoning_content and usage
+# ---------------------------------------------------------------------------
+
+class TestStreamObjects(unittest.TestCase):
+    def test_delta_message_reasoning_content(self):
+        delta = DeltaMessage(content="hello", reasoning_content="let me think")
+        self.assertEqual(delta.reasoning_content, "let me think")
+
+    def test_streaming_chunk_usage(self):
+        chunk = StreamingChunk(
+            model="gpt-4o",
+            choices=[],
+            usage=Usage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+        )
+        self.assertEqual(chunk.usage.total_tokens, 15)
+
+    def test_stream_response_aggregates_reasoning(self):
+        chunks = [
+            StreamingChunk(
+                id="c1", model="gpt-4o",
+                choices=[StreamingChoice(
+                    index=0,
+                    delta=DeltaMessage(reasoning_content="thinking... "),
+                )],
+            ),
+            StreamingChunk(
+                id="c1", model="gpt-4o",
+                choices=[StreamingChoice(
+                    index=0,
+                    delta=DeltaMessage(content="answer"),
+                    finish_reason="stop",
+                )],
+            ),
+        ]
+        stream = StreamResponse(iter(chunks))
+        final = stream.get_final_response()
+        self.assertEqual(final.content, "answer")
+
+    def test_stream_response_final_usage(self):
+        chunks = [
+            StreamingChunk(id="c1", model="m", choices=[]),
+            StreamingChunk(
+                id="c1", model="m", choices=[],
+                usage=Usage(prompt_tokens=10, completion_tokens=3, total_tokens=13),
+            ),
+        ]
+        stream = StreamResponse(iter(chunks))
+        final = stream.get_final_response()
+        self.assertIsNotNone(final.usage)
+        self.assertEqual(final.usage.total_tokens, 13)
 
 
 if __name__ == "__main__":

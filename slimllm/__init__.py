@@ -44,6 +44,7 @@ from .exceptions import (
 from .main import acompletion, astream, completion, token_counter
 from .types import (
     Choice,
+    ContentBlock,
     DeltaMessage,
     FunctionCall,
     FunctionDefinition,
@@ -75,6 +76,7 @@ __all__ = [
     "ModelResponse",
     "Choice",
     "Message",
+    "ContentBlock",
     "Usage",
     "ToolCall",
     "FunctionCall",

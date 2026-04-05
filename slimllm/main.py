@@ -27,7 +27,7 @@ from .providers.openai import (
     OpenAIProvider,
     OpenRouterProvider,
 )
-from .types import ModelResponse, RetryConfig, StreamingChunk, StreamResponse
+from .types import Message, ModelResponse, RetryConfig, StreamingChunk, StreamResponse, Tool
 
 
 def token_counter(model: str, text: str) -> int:
@@ -61,6 +61,24 @@ _google = GoogleAIStudioProvider()
 
 # Thread pool for wrapping sync I/O in async calls
 _executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="slimllm")
+
+
+# ---------------------------------------------------------------------------
+# Input normalisation helpers
+# ---------------------------------------------------------------------------
+
+def _norm_msg(m: Union[Message, Dict[str, Any]]) -> Dict[str, Any]:
+    """Accept either a Message dataclass or a raw dict; always return a dict."""
+    if isinstance(m, Message):
+        return m.to_dict()
+    return m
+
+
+def _norm_tool(t: Union[Tool, Dict[str, Any]]) -> Dict[str, Any]:
+    """Accept either a Tool dataclass or a raw dict; always return a dict."""
+    if isinstance(t, Tool):
+        return t.to_dict()
+    return t
 
 
 # ---------------------------------------------------------------------------
@@ -137,11 +155,11 @@ def _resolve_api_key(provider, explicit_key: Optional[str]) -> str:
 
 def completion(
     model: str,
-    messages: List[Dict[str, Any]],
+    messages: List[Union[Message, Dict[str, Any]]],
     *,
     api_key: Optional[str] = None,
     stream: bool = False,
-    tools: Optional[List[Dict[str, Any]]] = None,
+    tools: Optional[List[Union[Tool, Dict[str, Any]]]] = None,
     tool_choice: Optional[Union[str, Dict]] = None,
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
@@ -193,6 +211,11 @@ def completion(
     if api_base is None and "base_url" in kwargs:
         api_base = kwargs.pop("base_url")
 
+    # Normalise inputs: accept dataclasses or raw dicts interchangeably
+    messages = [_norm_msg(m) for m in messages]
+    if tools:
+        tools = [_norm_tool(t) for t in tools]
+
     result = provider.completion(
         model=resolved_model,
         messages=messages,
@@ -222,11 +245,11 @@ def completion(
 
 async def acompletion(
     model: str,
-    messages: List[Dict[str, Any]],
+    messages: List[Union[Message, Dict[str, Any]]],
     *,
     api_key: Optional[str] = None,
     stream: bool = False,
-    tools: Optional[List[Dict[str, Any]]] = None,
+    tools: Optional[List[Union[Tool, Dict[str, Any]]]] = None,
     tool_choice: Optional[Union[str, Dict]] = None,
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
@@ -273,10 +296,10 @@ async def acompletion(
 
 async def astream(
     model: str,
-    messages: List[Dict[str, Any]],
+    messages: List[Union[Message, Dict[str, Any]]],
     *,
     api_key: Optional[str] = None,
-    tools: Optional[List[Dict[str, Any]]] = None,
+    tools: Optional[List[Union[Tool, Dict[str, Any]]]] = None,
     tool_choice: Optional[Union[str, Dict]] = None,
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
@@ -302,6 +325,11 @@ async def astream(
     # Accept base_url as an alias for api_base (litellm compatibility)
     if api_base is None and "base_url" in kwargs:
         api_base = kwargs.pop("base_url")
+
+    # Normalise inputs before handing off to the thread producer
+    messages = [_norm_msg(m) for m in messages]
+    if tools:
+        tools = [_norm_tool(t) for t in tools]
 
     loop = asyncio.get_event_loop()
 

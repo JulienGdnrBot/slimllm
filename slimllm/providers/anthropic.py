@@ -24,6 +24,7 @@ from .._sse import iter_events
 from ..exceptions import ProviderError, raise_for_status
 from ..types import (
     Choice,
+    ContentBlock,
     DeltaMessage,
     FunctionCall,
     Message,
@@ -448,6 +449,13 @@ class AnthropicProvider(BaseProvider):
             elif event_type == "message_delta":
                 delta = payload.get("delta", {})
                 stop_reason = delta.get("stop_reason")
+                # Usage in message_delta: {"output_tokens": N}
+                raw_usage = payload.get("usage", {})
+                usage = None
+                if raw_usage:
+                    usage = Usage(
+                        completion_tokens=raw_usage.get("output_tokens", 0),
+                    )
                 if stop_reason:
                     finish_reason = self._map_finish_reason(stop_reason)
                     yield StreamingChunk(
@@ -460,4 +468,5 @@ class AnthropicProvider(BaseProvider):
                                 finish_reason=finish_reason,
                             )
                         ],
+                        usage=usage,
                     )
