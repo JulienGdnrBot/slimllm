@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.3 (2026-04-05)
+
+### Bug Fixes
+
+- Pin ALPN to http/1.1 to avoid h2 negotiation on streaming endpoints
+  ([`833fb20`](https://github.com/JulienGdnrBot/slimllm/commit/833fb20f2d22cc6acb85e8f7d2c02429b770262e))
+
+
 ## v1.0.2 (2026-04-05)
 
 ### Bug Fixes
