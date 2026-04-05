@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.0.4 (2026-04-05)
+
+### Bug Fixes
+
+- Handle SSE streams closed without trailing blank line
+  ([`363ba0c`](https://github.com/JulienGdnrBot/slimllm/commit/363ba0cb554960f199790f1cc5dc07c59ed410d0))
+
+### Continuous Integration
+
+- Switch PyPI publish to API token, disable attestations
+  ([`4d30626`](https://github.com/JulienGdnrBot/slimllm/commit/4d30626083ac2dcc231d930363ac058f05c2b351))
+
+
 ## v1.0.3 (2026-04-05)
 
 ### Bug Fixes
