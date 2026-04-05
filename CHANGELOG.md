@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.0 (2026-04-05)
+
+### Features
+
+- Add token_counter(), base_url alias, Anthropic param filtering
+  ([`6381eba`](https://github.com/JulienGdnrBot/slimllm/commit/6381eba06328c4870442b3934f92851ed64236ac))
+
+
 ## v1.0.4 (2026-04-05)
 
 ### Bug Fixes
