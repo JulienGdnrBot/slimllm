@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-04-05)
+
+### Features
+
+- **types**: Dataclass input layer for messages, tools, and stream objects
+  ([`c43e42d`](https://github.com/JulienGdnrBot/slimllm/commit/c43e42d48748c1138c0913305fc0a753387cb8ea))
+
+
 ## v1.2.0 (2026-04-05)
 
 ### Features
