@@ -48,7 +48,8 @@ def iter_events(
         # Lines starting with ":" are SSE comments — ignore them.
         # Unknown fields are silently ignored per the SSE spec.
 
-    # Flush any trailing event without a trailing blank line
+    # Flush any trailing event that wasn't terminated by a blank line
+    # (some providers close the connection without a final newline)
     if data_parts:
         data = "\n".join(data_parts)
         yield event_type, data
