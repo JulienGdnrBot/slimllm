@@ -33,9 +33,9 @@ jobs:
           semantic-release version
           semantic-release publish
 
-      # Upload the built dist/ to PyPI only when a new version was released.
-      # Uses OIDC trusted publishing — no PYPI_TOKEN secret needed.
-      # Requires a trusted publisher configured on pypi.org for this repo.
       - name: Publish to PyPI
         if: steps.release.outputs.released == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
+          attestations: false
