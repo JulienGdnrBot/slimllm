@@ -183,6 +183,7 @@ class ToolCall:
     id: str
     type: Literal["function"] = "function"
     function: Optional[FunctionCall] = None
+    index: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {"id": self.id, "type": self.type}
@@ -499,15 +500,21 @@ class StreamResponse:
                     reasoning_parts.append(delta.reasoning_content)
                 if delta.tool_calls:
                     for tc in delta.tool_calls:
-                        idx = 0  # streaming tools always index 0 for single call
+                        idx = tc.index if tc.index is not None else 0
                         if tc.id:
                             tool_acc[idx] = {
                                 "id": tc.id,
                                 "name": tc.function.name if tc.function else "",
                                 "args": tc.function.arguments if tc.function else "",
                             }
-                        elif idx in tool_acc and tc.function and tc.function.arguments:
-                            tool_acc[idx]["args"] += tc.function.arguments
+                        else:
+                            if idx not in tool_acc:
+                                tool_acc[idx] = {"id": "", "name": "", "args": ""}
+                            if tc.function:
+                                if tc.function.name:
+                                    tool_acc[idx]["name"] += tc.function.name
+                                if tc.function.arguments:
+                                    tool_acc[idx]["args"] += tc.function.arguments
 
         tool_calls = None
         if tool_acc:

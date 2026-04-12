@@ -250,6 +250,7 @@ class OpenAIProvider(BaseProvider):
                                 name=fn.get("name", ""),
                                 arguments=fn.get("arguments", ""),
                             ),
+                            index=tc.get("index"),
                         )
                     )
             choices.append(
