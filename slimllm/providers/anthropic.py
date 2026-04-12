@@ -119,19 +119,20 @@ class AnthropicProvider(BaseProvider):
         stop: Optional[Union[str, List[str]]],
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        # Extract system prompt(s) — Anthropic puts them at the top level
-        system: Optional[str] = None
+        # Extract system prompt(s) — Anthropic puts them at the top level.
+        # Content may be a plain string or a list of content blocks (with
+        # optional cache_control markers).  We always build a list of blocks
+        # so that cache_control is preserved end-to-end.
+        system_blocks: List[Dict[str, Any]] = []
         filtered_messages = []
         for msg in messages:
             if msg.get("role") == "system":
                 content = msg.get("content", "")
                 if isinstance(content, list):
-                    # Already a list of content blocks (e.g. with cache_control) — use as-is
-                    system = content
-                elif system is None:
-                    system = content
-                else:
-                    system += "\n\n" + content
+                    # Already a list of content blocks — keep as-is
+                    system_blocks.extend(content)
+                elif content:
+                    system_blocks.append({"type": "text", "text": content})
             else:
                 filtered_messages.append(self._convert_message(msg))
 
@@ -141,8 +142,19 @@ class AnthropicProvider(BaseProvider):
             "max_tokens": max_tokens or DEFAULT_MAX_TOKENS,
             "stream": stream,
         }
-        if system:
-            body["system"] = system
+        if system_blocks:
+            # Use block list format to preserve cache_control markers.
+            # If no block has cache_control, simplify to a plain string
+            # for backward compatibility.
+            has_cache_control = any(
+                b.get("cache_control") for b in system_blocks
+            )
+            if has_cache_control:
+                body["system"] = system_blocks
+            else:
+                body["system"] = "\n\n".join(
+                    b.get("text", "") for b in system_blocks
+                )
         if tools:
             body["tools"] = [self._convert_tool(t) for t in tools]
         if tool_choice is not None:
@@ -168,15 +180,21 @@ class AnthropicProvider(BaseProvider):
         # Tool result: OpenAI {"role":"tool","content":"...","tool_call_id":"..."}
         # → Anthropic {"role":"user","content":[{"type":"tool_result",...}]}
         if role == "tool":
+            block: Dict[str, Any] = {
+                "type": "tool_result",
+                "tool_use_id": msg.get("tool_call_id", ""),
+                "content": msg.get("content", ""),
+            }
+            # Preserve cache_control if the original content was a list with it
+            content = msg.get("content")
+            if isinstance(content, list):
+                for b in content:
+                    if isinstance(b, dict) and b.get("cache_control"):
+                        block["cache_control"] = b["cache_control"]
+                        break
             return {
                 "role": "user",
-                "content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": msg.get("tool_call_id", ""),
-                        "content": msg.get("content", ""),
-                    }
-                ],
+                "content": [block],
             }
 
         # Assistant message with tool calls:
@@ -211,11 +229,15 @@ class AnthropicProvider(BaseProvider):
     def _convert_tool(self, tool: Dict[str, Any]) -> Dict[str, Any]:
         """OpenAI tool → Anthropic tool definition."""
         fn = tool.get("function", {})
-        return {
+        result = {
             "name": fn.get("name", ""),
             "description": fn.get("description", ""),
             "input_schema": fn.get("parameters") or {"type": "object", "properties": {}},
         }
+        # Preserve cache_control for prompt caching
+        if tool.get("cache_control"):
+            result["cache_control"] = tool["cache_control"]
+        return result
 
     def _convert_tool_choice(
         self,
@@ -284,6 +306,8 @@ class AnthropicProvider(BaseProvider):
             prompt_tokens=raw_usage.get("input_tokens", 0),
             completion_tokens=raw_usage.get("output_tokens", 0),
             total_tokens=raw_usage.get("input_tokens", 0) + raw_usage.get("output_tokens", 0),
+            cache_read_input_tokens=raw_usage.get("cache_read_input_tokens", 0),
+            cache_creation_input_tokens=raw_usage.get("cache_creation_input_tokens", 0),
         ) if raw_usage else None
 
         return ModelResponse(
