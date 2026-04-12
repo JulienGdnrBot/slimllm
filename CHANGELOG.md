@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.3.1 (2026-04-12)
+
+### Bug Fixes
+
+- Preserve tool call index in streaming chunks for parallel tool calls
+  ([`bf675ff`](https://github.com/JulienGdnrBot/slimllm/commit/bf675ffdb47f14a80d2af5cdc77d3ebae7c9b112))
+
+
 ## v1.3.0 (2026-04-05)
 
 ### Features
