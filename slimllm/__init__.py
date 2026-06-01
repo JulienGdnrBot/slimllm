@@ -42,6 +42,13 @@ from .exceptions import (
     UnsupportedProviderError,
 )
 from .main import acompletion, astream, completion, token_counter
+from .multimodal import (
+    build_image_part,
+    extract_mime_and_data_from_data_uri,
+    extract_mime_from_url,
+    is_anthropic_native_model,
+    is_safe_image_url,
+)
 from .types import (
     Choice,
     ContentBlock,
@@ -72,6 +79,12 @@ __all__ = [
     "acompletion",
     "astream",
     "token_counter",
+    # Multimodal (provider-aware image content blocks)
+    "build_image_part",
+    "extract_mime_and_data_from_data_uri",
+    "extract_mime_from_url",
+    "is_anthropic_native_model",
+    "is_safe_image_url",
     # Types
     "ModelResponse",
     "Choice",
