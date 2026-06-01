@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-06-01)
+
+### Bug Fixes
+
+- **anthropic**: Preserve cache_control markers through message conversion
+  ([`9e3f800`](https://github.com/JulienGdnrBot/slimllm/commit/9e3f8008f64fa14039f1854d9e6a3bc54f093d1c))
+
+### Features
+
+- **multimodal**: Provider-aware image emitter for OpenAI + Anthropic
+  ([`8fe9dae`](https://github.com/JulienGdnrBot/slimllm/commit/8fe9dae11dd7ba5cd1ef6742bef8b1d40bb178aa))
+
+
 ## v1.3.1 (2026-04-12)
 
 ### Bug Fixes
