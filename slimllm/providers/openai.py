@@ -7,6 +7,7 @@ they share the same /v1/chat/completions wire format.
 from __future__ import annotations
 
 import json
+import math
 import uuid
 from typing import Any, Dict, Generator, List, Optional, Union
 
@@ -40,6 +41,25 @@ OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 MISTRAL_BASE = "https://api.mistral.ai/v1"
 DEEPSEEK_BASE = "https://api.deepseek.com/v1"
 GOOGLE_AI_STUDIO_BASE = "https://generativelanguage.googleapis.com/v1beta/openai"
+
+
+def _reported_cost(raw_usage: Any) -> Optional[float]:
+    """``usage.cost`` as a float, when it is a finite non-negative number.
+
+    OpenRouter returns the cost of each generation (USD) in ``usage.cost`` on the
+    response body and on the final streamed chunk. OpenAI and most compatible
+    endpoints send no such field, which yields None. A bool, a string or a
+    negative / non-finite number is not a cost and also yields None.
+    """
+    if not isinstance(raw_usage, dict):
+        return None
+    cost = raw_usage.get("cost")
+    if isinstance(cost, bool) or not isinstance(cost, (int, float)):
+        return None
+    cost = float(cost)
+    if not math.isfinite(cost) or cost < 0:
+        return None
+    return cost
 
 
 class OpenAIProvider(BaseProvider):
@@ -195,6 +215,7 @@ class OpenAIProvider(BaseProvider):
             prompt_tokens=raw_usage.get("prompt_tokens", 0),
             completion_tokens=raw_usage.get("completion_tokens", 0),
             total_tokens=raw_usage.get("total_tokens", 0),
+            cost=_reported_cost(raw_usage),
         ) if raw_usage else None
 
         return ModelResponse(
@@ -275,6 +296,7 @@ class OpenAIProvider(BaseProvider):
                 prompt_tokens=raw_usage.get("prompt_tokens", 0),
                 completion_tokens=raw_usage.get("completion_tokens", 0),
                 total_tokens=raw_usage.get("total_tokens", 0),
+                cost=_reported_cost(raw_usage),
             )
 
         return StreamingChunk(

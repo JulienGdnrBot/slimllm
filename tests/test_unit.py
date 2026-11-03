@@ -453,6 +453,82 @@ class TestOpenAIStreamParsing(unittest.TestCase):
         self.assertEqual(tcs[0].function.name, "foo")
 
 
+class TestOpenRouterReportedCost(unittest.TestCase):
+    """OpenRouter's ``usage.cost`` (USD) is kept on the Usage object, by value."""
+
+    def setUp(self):
+        self.p = OpenRouterProvider()
+
+    def _body(self, usage):
+        return {
+            "id": "gen-1", "model": "deepseek/deepseek-v4-pro", "created": 0,
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"},
+                         "finish_reason": "stop"}],
+            "usage": usage,
+        }
+
+    def test_response_keeps_reported_cost(self):
+        resp = self.p._parse_response(self._body({
+            "prompt_tokens": 36, "completion_tokens": 40, "total_tokens": 76,
+            "cost": 0.00020184,
+        }))
+        self.assertEqual(resp.usage.cost, 0.00020184)
+        self.assertEqual(resp.usage.prompt_tokens, 36)
+        self.assertEqual(resp.usage.completion_tokens, 40)
+        self.assertEqual(resp.usage.total_tokens, 76)
+
+    def test_integer_cost_becomes_float(self):
+        resp = self.p._parse_response(self._body({"prompt_tokens": 1, "cost": 2}))
+        self.assertEqual(resp.usage.cost, 2.0)
+        self.assertIs(type(resp.usage.cost), float)
+
+    def test_zero_cost_is_kept_not_dropped(self):
+        resp = self.p._parse_response(self._body({"prompt_tokens": 1, "cost": 0}))
+        self.assertEqual(resp.usage.cost, 0.0)
+
+    def test_no_cost_field_is_none(self):
+        resp = self.p._parse_response(self._body(
+            {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}))
+        self.assertIsNone(resp.usage.cost)
+
+    def test_invalid_costs_are_none(self):
+        for bad in (True, "0.1", -0.5, float("nan"), float("inf"), None, [0.1]):
+            with self.subTest(cost=bad):
+                resp = self.p._parse_response(self._body({"prompt_tokens": 1, "cost": bad}))
+                self.assertIsNone(resp.usage.cost)
+
+    def test_stream_usage_chunk_keeps_reported_cost(self):
+        raw = {
+            "id": "gen-1", "model": "deepseek/deepseek-v4-pro", "created": 0,
+            "choices": [],
+            "usage": {"prompt_tokens": 36, "completion_tokens": 40,
+                      "total_tokens": 76, "cost": 0.00020184},
+        }
+        chunk = self.p._parse_chunk(raw, "fallback")
+        self.assertEqual(chunk.usage.cost, 0.00020184)
+        self.assertEqual(chunk.usage.total_tokens, 76)
+
+    def test_stream_aggregate_carries_cost_to_final_response(self):
+        chunks = [
+            self.p._parse_chunk({"id": "g", "choices": [
+                {"index": 0, "delta": {"content": "hi"}, "finish_reason": "stop"}]}, "m"),
+            self.p._parse_chunk({"id": "g", "choices": [], "usage": {
+                "prompt_tokens": 3, "completion_tokens": 1, "total_tokens": 4,
+                "cost": 0.0000125}}, "m"),
+        ]
+        final = StreamResponse(iter(chunks)).get_final_response()
+        self.assertEqual(final.usage.cost, 0.0000125)
+        self.assertEqual(final.usage.total_tokens, 4)
+
+    def test_openai_without_cost_is_none(self):
+        resp = OpenAIProvider()._parse_response(self._body(
+            {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}))
+        self.assertIsNone(resp.usage.cost)
+
+    def test_usage_default_cost_is_none(self):
+        self.assertIsNone(Usage().cost)
+
+
 # ---------------------------------------------------------------------------
 # RetryConfig / ProviderConfig dataclasses
 # ---------------------------------------------------------------------------

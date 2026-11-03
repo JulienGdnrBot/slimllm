@@ -381,6 +381,10 @@ class Usage:
     # Anthropic prompt caching metrics
     cache_read_input_tokens: int = 0
     cache_creation_input_tokens: int = 0
+    # Provider-reported cost of the call, in USD, when the provider returns one
+    # (OpenRouter sends ``usage.cost`` on every response and on the streamed
+    # usage chunk). None when the provider reports no cost.
+    cost: Optional[float] = None
 
 
 @dataclass
