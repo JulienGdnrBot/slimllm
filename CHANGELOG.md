@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.1 (2026-11-03)
+
+### Bug Fixes
+
+- **openrouter**: Keep the provider-reported usage.cost on Usage
+  ([`74d6853`](https://github.com/JulienGdnrBot/slimllm/commit/74d68536edd76771ee401d921485bcda8f0a2836))
+
+
 ## v1.4.0 (2026-06-01)
 
 ### Bug Fixes
